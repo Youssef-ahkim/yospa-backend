@@ -1,0 +1,39 @@
+<?php
+
+namespace App\Models;
+
+use App\Traits\BelongsToSpa;
+use Illuminate\Database\Eloquent\Model;
+
+class Reservation extends Model
+{
+    use BelongsToSpa;
+
+    protected $fillable = [
+        'spa_id',
+        'client_id',
+        'service_id',
+        'start_time',
+        'end_time',
+        'status',
+        'total_price',
+        'notes',
+    ];
+
+    protected $casts = [
+        'start_time' => 'datetime',
+        'end_time' => 'datetime',
+        'total_price' => 'decimal:2',
+    ];
+
+    public function client()
+    {
+        return $this->belongsTo(Client::class);
+    }
+
+    public function service()
+    {
+        return $this->belongsTo(Service::class);
+    }
+}
+
