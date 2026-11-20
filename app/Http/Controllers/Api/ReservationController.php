@@ -4,7 +4,9 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Models\Reservation;
+use App\Models\Service;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class ReservationController extends Controller
 {
@@ -18,8 +20,20 @@ class ReservationController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'client_id'   => 'required|exists:clients,id',
-            'service_id'  => 'required|exists:services,id',
+            'client_id'   => [
+                'required',
+                Rule::exists('clients', 'id')->where('spa_id', auth()->user()->spa_id),
+            ],
+            'service_id'  => [
+                'required',
+                Rule::exists('services', 'id')->where('spa_id', auth()->user()->spa_id),
+                function ($attribute, $value, $fail) {
+                    $service = Service::find($value);
+                    if ($service && ! $service->is_active) {
+                        $fail('This service is not available.');
+                    }
+                },
+            ],
             'start_time'  => 'required|date',
             'end_time'    => 'required|date|after:start_time',
             'status'      => 'sometimes|string|in:pending,confirmed,completed,cancelled',
@@ -43,8 +57,22 @@ class ReservationController extends Controller
     public function update(Request $request, Reservation $reservation)
     {
         $validated = $request->validate([
-            'client_id'   => 'sometimes|exists:clients,id',
-            'service_id'  => 'sometimes|exists:services,id',
+            'client_id'   => [
+                'sometimes',
+                Rule::exists('clients', 'id')->where('spa_id', auth()->user()->spa_id),
+            ],
+            'service_id'  => [
+                'sometimes',
+                Rule::exists('services', 'id')->where('spa_id', auth()->user()->spa_id),
+                function ($attribute, $value, $fail) use ($reservation) {
+                    if ((int) $value !== (int) $reservation->service_id) {
+                        $service = Service::find($value);
+                        if ($service && ! $service->is_active) {
+                            $fail('This service is not available.');
+                        }
+                    }
+                },
+            ],
             'start_time'  => 'sometimes|date',
             'end_time'    => 'sometimes|date|after:start_time',
             'status'      => 'sometimes|string|in:pending,confirmed,completed,cancelled',
