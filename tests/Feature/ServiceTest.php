@@ -510,4 +510,62 @@ class ServiceTest extends TestCase
                 ],
             ]);
     }
+
+    // 11. Reservation update with another spa's client_id or service_id returns 422
+    public function test_reservation_update_rejects_cross_tenant_client_and_service(): void
+    {
+        $clientA = Client::create([
+            'spa_id'    => $this->spaA->id,
+            'full_name' => 'Emma Client',
+            'phone'     => '+5555555555',
+        ]);
+
+        $serviceA = Service::create([
+            'spa_id'           => $this->spaA->id,
+            'name'             => 'Alpha Service 1',
+            'duration_minutes' => 60,
+            'price'            => 100.00,
+            'is_active'        => true,
+        ]);
+
+        $reservation = Reservation::create([
+            'spa_id'      => $this->spaA->id,
+            'client_id'   => $clientA->id,
+            'service_id'  => $serviceA->id,
+            'start_time'  => now()->addDay(),
+            'end_time'    => now()->addDay()->addHour(),
+            'status'      => 'pending',
+            'total_price' => 100.00,
+        ]);
+
+        $clientB = Client::create([
+            'spa_id'    => $this->spaB->id,
+            'full_name' => 'Foreign Client',
+            'phone'     => '+6666666666',
+        ]);
+
+        $serviceB = Service::create([
+            'spa_id'           => $this->spaB->id,
+            'name'             => 'Foreign Service',
+            'duration_minutes' => 60,
+            'price'            => 100.00,
+            'is_active'        => true,
+        ]);
+
+        Sanctum::actingAs($this->userA);
+
+        // Reject updating client_id to another spa's client
+        $responseClient = $this->patchJson("/api/reservations/{$reservation->id}", [
+            'client_id' => $clientB->id,
+        ]);
+        $responseClient->assertStatus(422)
+            ->assertJsonValidationErrors(['client_id']);
+
+        // Reject updating service_id to another spa's service
+        $responseService = $this->patchJson("/api/reservations/{$reservation->id}", [
+            'service_id' => $serviceB->id,
+        ]);
+        $responseService->assertStatus(422)
+            ->assertJsonValidationErrors(['service_id']);
+    }
 }
