@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\ReservationController;
+use App\Http\Controllers\Api\ServiceController;
 use Illuminate\Support\Facades\Route;
 
 // Public Test / Health Check
@@ -24,4 +25,5 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::apiResource('clients', ClientController::class);
     Route::apiResource('reservations', ReservationController::class);
+    Route::apiResource('services', ServiceController::class);
 });
