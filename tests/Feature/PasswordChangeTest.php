@@ -133,6 +133,24 @@ class PasswordChangeTest extends TestCase
         $this->assertTrue(Hash::check('oldpassword123', $this->owner->fresh()->password));
     }
 
+    public function test_non_database_transient_token_handled_safely(): void
+    {
+        // When authenticated via Sanctum::actingAs(), currentAccessToken() is a TransientToken, not a PersonalAccessToken
+        \Laravel\Sanctum\Sanctum::actingAs($this->owner);
+
+        $response = $this->postJson('/api/user/password', [
+            'current_password'      => 'oldpassword123',
+            'password'              => 'newtransientpass123',
+            'password_confirmation' => 'newtransientpass123',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'message' => 'Password updated successfully',
+        ]);
+        $this->assertTrue(Hash::check('newtransientpass123', $this->owner->fresh()->password));
+    }
+
     public function test_same_as_current_password_is_rejected(): void
     {
         $token = $this->owner->createToken('current-device')->plainTextToken;
