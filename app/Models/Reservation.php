@@ -13,6 +13,7 @@ class Reservation extends Model
         'spa_id',
         'client_id',
         'service_id',
+        'therapist_id',
         'start_time',
         'end_time',
         'status',
@@ -34,6 +35,11 @@ class Reservation extends Model
     public function service()
     {
         return $this->belongsTo(Service::class);
+    }
+
+    public function therapist()
+    {
+        return $this->belongsTo(Therapist::class);
     }
 }
 
