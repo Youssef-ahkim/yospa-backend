@@ -45,8 +45,9 @@ class AuthController extends Controller
             ], 403);
         }
 
-        // Generate a Sanctum token for the user
-        $token = $user->createToken('spa-token')->plainTextToken;
+        // Generate a Sanctum token for the user (superusers expire in 12 hours, tenant tokens unchanged)
+        $expiresAt = $user->role === 'superuser' ? now()->addHours(12) : null;
+        $token = $user->createToken('spa-token', ['*'], $expiresAt)->plainTextToken;
 
         return response()->json([
             'message' => 'Logged in successfully',

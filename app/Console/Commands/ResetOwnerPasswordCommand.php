@@ -8,9 +8,9 @@ use Illuminate\Support\Facades\Hash;
 
 class ResetOwnerPasswordCommand extends Command
 {
-    protected $signature = 'yospa:reset-owner-password {email : The email address of the owner or admin}';
+    protected $signature = 'yospa:reset-owner-password {email : The email address of the owner, admin, or superuser}';
 
-    protected $description = 'Reset password for an owner or admin and revoke their active tokens';
+    protected $description = 'Reset password for an owner, admin, or superuser and revoke their active tokens';
 
     public function handle(): int
     {
@@ -23,7 +23,7 @@ class ResetOwnerPasswordCommand extends Command
             return 1;
         }
 
-        if (! in_array($user->role, ['owner', 'admin'], true)) {
+        if (! in_array($user->role, ['owner', 'admin', 'superuser'], true)) {
             $this->error("User '{$email}' has role '{$user->role}'. Password reset via this command is restricted to owners and admins.");
             return 1;
         }

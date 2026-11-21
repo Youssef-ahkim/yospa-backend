@@ -85,6 +85,17 @@ class TenantIsolationTest extends TestCase
         ]);
     }
 
+    public function test_unauthenticated_request_to_tenant_routes_returns_json_401(): void
+    {
+        $response = $this->getJson('/api/clients');
+        $response->assertStatus(401)
+            ->assertJson(['message' => 'Unauthenticated.']);
+
+        $deleteRes = $this->deleteJson('/api/clients/1');
+        $deleteRes->assertStatus(401)
+            ->assertJson(['message' => 'Unauthenticated.']);
+    }
+
     public function test_superuser_gets_403_on_all_tenant_routes(): void
     {
         Sanctum::actingAs($this->superuser);
