@@ -2,6 +2,10 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ClientController;
+use App\Http\Controllers\Api\Platform\PlatformAuditController;
+use App\Http\Controllers\Api\Platform\PlatformSpaController;
+use App\Http\Controllers\Api\Platform\PlatformStatsController;
+use App\Http\Controllers\Api\Platform\PlatformUserController;
 use App\Http\Controllers\Api\ReservationController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\StaffController;
@@ -57,5 +61,18 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
         Route::apiResource('therapists', TherapistController::class)->only(['index', 'show']);
         Route::apiResource('therapists', TherapistController::class)->only(['store', 'update', 'destroy'])
             ->middleware('role:owner,admin');
+    });
+
+    // Platform Superuser Routes (Never scoped to a single spa, no tenant middleware)
+    Route::prefix('platform')->middleware(['role:superuser', 'throttle:60,1'])->group(function () {
+        Route::get('stats', [PlatformStatsController::class, 'index']);
+        Route::get('spas', [PlatformSpaController::class, 'index']);
+        Route::post('spas', [PlatformSpaController::class, 'store']);
+        Route::get('spas/{id}', [PlatformSpaController::class, 'show']);
+        Route::patch('spas/{id}', [PlatformSpaController::class, 'update']);
+        Route::delete('spas/{id}', [PlatformSpaController::class, 'destroy']);
+        Route::post('spas/{id}/users', [PlatformSpaController::class, 'storeUser']);
+        Route::patch('users/{id}', [PlatformUserController::class, 'update']);
+        Route::get('audit', [PlatformAuditController::class, 'index']);
     });
 });
