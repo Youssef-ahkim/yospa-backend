@@ -250,4 +250,38 @@ class RoleEnforcementTest extends TestCase
 
         $this->assertDatabaseCount('personal_access_tokens', 0);
     }
+
+    // 6. Login checks password before is_active check
+    public function test_login_checks_password_before_is_active_check(): void
+    {
+        User::create([
+            'name'      => 'Inactive Check User',
+            'email'     => 'inactive-check@yospa.test',
+            'password'  => Hash::make('correctpassword'),
+            'spa_id'    => $this->spa->id,
+            'role'      => 'staff',
+            'is_active' => false,
+        ]);
+
+        // Wrong password returns 422 standard credential error
+        $wrongPasswordResponse = $this->postJson('/api/login', [
+            'email'    => 'inactive-check@yospa.test',
+            'password' => 'wrongpassword',
+        ]);
+        $wrongPasswordResponse->assertStatus(422)
+            ->assertJsonValidationErrors(['email'])
+            ->assertJson([
+                'errors' => [
+                    'email' => ['The provided credentials are incorrect.'],
+                ],
+            ]);
+
+        // Correct password returns 403 deactivated account error
+        $correctPasswordResponse = $this->postJson('/api/login', [
+            'email'    => 'inactive-check@yospa.test',
+            'password' => 'correctpassword',
+        ]);
+        $correctPasswordResponse->assertStatus(403)
+            ->assertJson(['message' => 'Your account has been deactivated.']);
+    }
 }

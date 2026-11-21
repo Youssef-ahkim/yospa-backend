@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\ReservationController;
 use App\Http\Controllers\Api\ServiceController;
+use App\Http\Controllers\Api\StaffController;
 use Illuminate\Support\Facades\Route;
 
 // Public Test / Health Check
@@ -22,6 +23,13 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [AuthController::class, 'logout']);
+
+    // Staff Management (Owner and Admin only)
+    Route::middleware('role:owner,admin')->group(function () {
+        Route::get('staff', [StaffController::class, 'index']);
+        Route::post('staff', [StaffController::class, 'store']);
+        Route::patch('staff/{id}', [StaffController::class, 'update']);
+    });
 
     // Clients: Read & Write open to all roles; Delete restricted to owner and admin
     Route::apiResource('clients', ClientController::class)->except(['destroy']);
