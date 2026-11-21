@@ -244,6 +244,12 @@ class PlatformSpaController extends Controller
             $spaSlug = $spa->slug;
             $spaName = $spa->name;
 
+            // Capture counts at deletion time so audit log retains meaning
+            $usersCount = User::where('spa_id', $spaId)->count();
+            $clientsCount = Client::withoutGlobalScopes()->where('spa_id', $spaId)->count();
+            $servicesCount = Service::withoutGlobalScopes()->where('spa_id', $spaId)->count();
+            $therapistsCount = Therapist::withoutGlobalScopes()->where('spa_id', $spaId)->count();
+
             // Delete dependent records
             Therapist::withoutGlobalScopes()->where('spa_id', $spaId)->delete();
             Service::withoutGlobalScopes()->where('spa_id', $spaId)->delete();
@@ -265,6 +271,12 @@ class PlatformSpaController extends Controller
                     'deleted_spa_id'   => $spaId,
                     'deleted_spa_slug' => $spaSlug,
                     'deleted_spa_name' => $spaName,
+                    'counts'           => [
+                        'users'      => $usersCount,
+                        'clients'    => $clientsCount,
+                        'services'   => $servicesCount,
+                        'therapists' => $therapistsCount,
+                    ],
                 ],
                 'ip'            => $request->ip(),
                 'created_at'    => now(),

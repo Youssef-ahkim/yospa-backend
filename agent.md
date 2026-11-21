@@ -19,11 +19,12 @@ This file serves as the definitive reference for AI agents working on **YoSpa**,
 Data isolation across tenants is enforced at the Eloquent ORM level via a global scope applied to tenant models.
 
 ### Eloquent Trait: `App\Traits\BelongsToSpa`
-* **Query Filtering:** Automatically appends `WHERE spa_id = auth()->user()->spa_id` to all Eloquent SELECT queries when a user is authenticated via Sanctum.
+* **Query Filtering:** Automatically appends `WHERE spa_id = auth()->user()->spa_id` to all Eloquent queries when a user belongs to a spa.
+* **Fail-Closed Security:** If an authenticated user has `spa_id = null` (e.g., superuser), the trait strictly appends `WHERE 1 = 0` (fail-closed), guaranteeing zero tenant data exposure even if tenant routes are accidentally accessed.
 * **Auto-Assignment:** Automatically assigns `model->spa_id = auth()->user()->spa_id` during the `creating` event on standard record insertion.
 * **Tenant Models:** `Client`, `Service`, `Reservation`, `Therapist`. (The `User` model belongs to a `Spa` via `spa_id` foreign key and relation).
 
-> **Crucial Rule for Agents:** Never disable global scopes (`withoutGlobalScopes()`) unless explicitly writing super-admin system management endpoints.
+> **Crucial Rule for Agents:** Never disable global scopes (`withoutGlobalScopes()`) unless explicitly writing superuser platform management endpoints.
 
 ---
 
@@ -33,7 +34,11 @@ Data isolation across tenants is enforced at the Eloquent ORM level via a global
 id (PK), name, slug, status, created_at, updated_at
 
 [ users ]
-id (PK), spa_id (FK -> spas.id), name, email, password, role ('owner'|'admin'|'staff', default 'staff'), is_active (boolean, default true), created_at, updated_at
+id (PK), spa_id (nullable FK -> spas.id, onDelete cascade), name, email, password, role ('owner'|'admin'|'staff'|'superuser', default 'staff'), is_active (boolean, default true), created_at, updated_at
+Partial unique index: role = 'superuser' (single superuser system-wide)
+
+[ platform_audit_logs ]
+id (PK), actor_user_id (nullable FK -> users.id, nullOnDelete), action (string), subject_type (string), subject_id (nullable bigint), spa_id (nullable FK -> spas.id, nullOnDelete), meta (nullable json), ip (nullable string 45), created_at (timestamp)
 
 [ therapists ]
 id (PK), spa_id (FK -> spas.id), user_id (nullable FK -> users.id, nullOnDelete), name, phone (nullable), email (nullable), color (string 7, default '#3B82F6'), notes (nullable text), is_active (boolean, default true), created_at, updated_at
@@ -62,15 +67,35 @@ Indexes: (spa_id, start_time), (therapist_id)
 * **Content Headers:** `Accept: application/json`, `Content-Type: application/json`
 
 ### Roles & Permission Matrix
+* **`superuser`**: Platform superuser (single account, `spa_id` null). Dedicated to `/api/platform/*` management (spas, cross-spa users, platform stats, audit trail). Strictly forbidden from accessing tenant routes (`tenant` middleware returns 403). Sanctum login token automatically expires in 12 hours.
 * **`owner`**: Full access to all tenant resources, including creating/updating owner and admin accounts.
 * **`admin`**: Manages services, therapists, and staff-role users; can create, update, and delete clients and reservations; cannot create, modify, deactivate, or reset passwords of owner or admin accounts.
 * **`staff`**: Read access across all tenant resources; can create and update clients and reservations; cannot delete clients or reservations; cannot write services, therapists, or staff accounts.
 
-### Authentication Routes (`routes/api.php`)
-* `POST /api/login` — Public endpoint. Validates `email` and `password`. Refuses inactive accounts with 403 (`{"message": "Your account has been deactivated."}`). Returns `{ message, token, user }`.
-* `POST /api/logout` — Protected (`auth:sanctum`, `active`). Revokes current access token.
-* `GET /api/user` — Protected (`auth:sanctum`, `active`). Returns authenticated user profile with `spa` relation.
-* `POST /api/user/password` — Protected (`auth:sanctum`, `active`, `throttle:password_change`). Open to all roles (`owner`, `admin`, `staff`). Requires `current_password`, `password` (min 8, confirmed, different from current), `password_confirmation`. Wrong current password returns 422 (`"The current password is incorrect."`). On success, updates password hash, revokes all other Sanctum tokens while preserving current token, returns 200 `{ "message": "Password updated successfully" }`. Throttled at 5 attempts/min per user.
+### Authentication & Non-Tenant Routes (`routes/api.php`)
+* `POST /api/login` — Public endpoint. Validates `email` and `password`. Allows `spa_id: null` ONLY for role `superuser`. For non-superusers without `spa_id` or with suspended spa, returns 403 (`{"message": "Your account has been deactivated."}`). Returns `{ message, token, user }`. Superuser tokens have `expires_at` set to 12 hours; tenant tokens remain standard (`null`).
+* `POST /api/logout` — Protected (`auth:sanctum`, `active`). Revokes current access token. Allowed for both tenant users and superuser (skips `tenant` middleware).
+* `GET /api/user` — Protected (`auth:sanctum`, `active`). Returns authenticated user profile with `spa` relation (`spa: null` for superuser). Skips `tenant` middleware.
+* `POST /api/user/password` — Protected (`auth:sanctum`, `active`, `throttle:password_change`). Open to all roles (`owner`, `admin`, `staff`, `superuser`). Skips `tenant` middleware. Requires `current_password`, `password` (min 8, confirmed, different from current), `password_confirmation`. Wrong current password returns 422 (`"The current password is incorrect."`). On success, updates password hash, revokes all other Sanctum tokens while preserving current token, returns 200 `{ "message": "Password updated successfully" }`. Throttled at 5 attempts/min per user.
+
+### Tenant Middleware (`tenant` / `EnsureBelongsToSpa`)
+Applied to all tenant-scoped routes (`clients.*`, `reservations.*`, `services.*`, `therapists.*`, `staff.*`). Requires authenticated user to have a non-null `spa_id`. If user lacks a spa (such as the superuser), immediately halts with 403 (`"Unauthorized action."`). Prioritized before `SubstituteBindings` in `bootstrap/app.php` so unauthorized requests reject before model queries execute.
+
+### Platform Superuser Routes (`/api/platform/*`)
+Protected by `['auth:sanctum', 'active', 'role:superuser', 'throttle:60,1']`. Zero tenant middleware; all queries execute with manual ID binding and explicit `withoutGlobalScopes()`. All write operations log to `platform_audit_logs` without storing passwords or tokens.
+* `GET /api/platform/stats` — Platform aggregates: `spas: { total, active, suspended }`, `users`, `clients`, `reservations`.
+* `GET /api/platform/spas` — List of spas with `id`, `name`, `slug`, `status`, `owner_emails`, `counts` (users, clients, services, therapists, reservations), `created_at`. Supports `?status=active|suspended` and `?search=` (searches name, slug, owner email case-insensitively).
+* `POST /api/platform/spas` — Creates spa and initial owner in one transaction. Payload: `{ name, slug?, owner_name, owner_email, owner_password }`. Auto-suffixes slug collisions (`slug-1`, `slug-2`); enforces case-insensitive email uniqueness. Returns 201 `{ message, spa, owner }`.
+* `GET /api/platform/spas/{id}` — Spa details with entity `counts` and its `users` (`id`, `name`, `email`, `role`, `is_active`).
+* `PATCH /api/platform/spas/{id}` — Updates spa (`name`, `slug`, `status: active|suspended`). Suspending immediately locks out all that spa's users on their next authenticated request. Returns `{ message, spa }`.
+* `DELETE /api/platform/spas/{id}` — Permanently deletes spa and all tenant records.
+  * **Guards:** Requires payload `{ confirm_slug: "<exact-slug>" }` (422 if mismatched); requires status `suspended` AND 0 reservations (409 otherwise).
+  * Cleans up therapists, services, clients, users, and revokes users' personal access tokens.
+  * Audit row keeps snapshot of deleted spa name, slug, and entity counts with `spa_id = null`.
+* `POST /api/platform/spas/{id}/users` — Provisions user under a spa. Payload: `{ name, email, password (min 8), role: owner|admin|staff }`. Role `superuser` rejected. Returns 201 `{ message, user }`.
+* `PATCH /api/platform/users/{id}` — Updates spa user (`name`, `email`, `role`, `is_active`, optional `password`).
+  * **Guards:** 404 for superuser or spa-less users; 409 when deactivating or demoting the last active owner of that spa; revokes active tokens on deactivation, role change, or password reset.
+* `GET /api/platform/audit` — Returns recent platform audit logs (`latest('id')`, default limit 50, max 100). Meta never exposes secrets.
 
 ### Resource Routes (`routes/api.php`)
 All resource controllers run inside `Route::middleware(['auth:sanctum', 'active'])`:

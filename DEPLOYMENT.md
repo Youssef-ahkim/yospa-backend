@@ -42,19 +42,33 @@ Configure these variables in your production `.env` file:
 
 ## 2. Production Build & Deployment Commands
 
-Run these steps during automated deployment (CI/CD, Docker entrypoint, or deployment script):
+### Initial Setup & Creating the Superuser
+The platform has a single superuser account isolated from tenant spas used for cross-tenant administration:
+1. Run `php artisan yospa:create-superuser` (supports `--name` and `--email` options).
+2. Prompts for a secure password with confirmation (minimum 12 characters). Passwords are never accepted via CLI flags or printed to console.
+3. Enforces a single superuser system-wide (enforced by a partial unique index in PostgreSQL/SQLite).
+4. In case of emergency access recovery, run `php artisan yospa:reset-owner-password <superuser-email>` to set a new password and immediately revoke all active tokens.
 
+### Deploying Updates (Zero-Downtime Deployment Workflow)
+Run these commands in order during every deployment:
 ```bash
-# 1. Install production dependencies (no dev dependencies, optimized autoloader)
+# 1. Fetch latest changes
+git pull origin main
+
+# 2. Install production dependencies (no dev dependencies, optimized autoloader)
 composer install --no-dev --optimize-autoloader --no-interaction
 
-# 2. Run additive database migrations
+# 3. Run additive database migrations
 php artisan migrate --force
 
-# 3. Cache configuration, routes, and events for maximum performance
+# 4. Cache configuration, routes, and events for maximum performance
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
+php artisan event:cache
+
+# 5. Reload PHP-FPM to flush OPcache and load new code
+sudo systemctl reload php8.2-fpm
 ```
 
 > [!CAUTION]
@@ -170,7 +184,7 @@ pg_restore -C -d postgres -h "$DB_HOST" -U "$DB_USERNAME" /var/backups/yospa_YYY
    - Roles (`owner`, `admin`, `staff`) are enforced strictly at the route middleware level (`CheckRole`), rather than through Laravel Model Policies or fine-grained domain gates.
 3. **Data Visibility Across Roles**:
    - Service prices, therapist details, and client phone/email data are visible to users with the `staff` role within the same spa.
-4. **No Audit Log**:
-   - There is currently no changelog or audit trail for record creation, modification, or soft/hard deletion.
+4. **Tenant-Level Audit Trail**:
+   - Platform operations (spa creation, modification, deletion, and cross-spa user provisioning) are comprehensively logged in `platform_audit_logs`. Individual day-to-day tenant transactional mutations (e.g. updating a client note or reservation status within a spa) do not currently write audit logs.
 5. **Partial Updates on Reservations**:
    - When updating reservation `end_time` alone via `PATCH`, validation requires `start_time` to confirm the sequence (`after:start_time`). API clients should send both `start_time` and `end_time` together.

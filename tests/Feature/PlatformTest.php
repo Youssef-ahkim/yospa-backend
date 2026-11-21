@@ -454,13 +454,24 @@ class PlatformTest extends TestCase
             'spa_id' => null,
         ]);
 
-        // The deletion audit log itself exists
+        // The deletion audit log itself exists and captured counts at deletion time
         $this->assertDatabaseHas('platform_audit_logs', [
             'action'       => 'spa.delete',
             'subject_type' => 'spa',
             'subject_id'   => $spa->id,
             'spa_id'       => null,
         ]);
+
+        $deleteAudit = PlatformAuditLog::where('action', 'spa.delete')
+            ->where('subject_id', $spa->id)
+            ->first();
+        $this->assertNotNull($deleteAudit);
+        $this->assertEquals('deletable-spa', $deleteAudit->meta['deleted_spa_slug']);
+        $this->assertEquals('Deletable Spa', $deleteAudit->meta['deleted_spa_name']);
+        $this->assertEquals(1, $deleteAudit->meta['counts']['users']);
+        $this->assertEquals(1, $deleteAudit->meta['counts']['clients']);
+        $this->assertEquals(1, $deleteAudit->meta['counts']['services']);
+        $this->assertEquals(1, $deleteAudit->meta['counts']['therapists']);
     }
 
     public function test_add_user_and_patch_user_guards_and_token_revocation(): void
