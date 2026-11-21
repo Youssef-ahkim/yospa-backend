@@ -31,6 +31,12 @@ class AuthController extends Controller
             ], 403);
         }
 
+        if ($user->spa_id && $user->spa?->status === 'suspended') {
+            return response()->json([
+                'message' => 'Your account has been deactivated.',
+            ], 403);
+        }
+
         // Generate a Sanctum token for the user
         $token = $user->createToken('spa-token')->plainTextToken;
 
