@@ -14,12 +14,25 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware) {
+        $trustedProxies = env('TRUSTED_PROXIES');
+        if (! empty($trustedProxies)) {
+            $middleware->trustProxies(
+                at: $trustedProxies === '*' ? '*' : array_map('trim', explode(',', $trustedProxies))
+            );
+        }
+
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('api/*') ? null : '/');
+
         $middleware->alias([
             'role'   => \App\Http\Middleware\CheckRole::class,
             'active' => \App\Http\Middleware\EnsureUserIsActive::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
+        $exceptions->shouldRenderJsonWhen(function (Request $request, Throwable $e) {
+            return $request->is('api/*');
+        });
+
         // Force unauthenticated API requests to return JSON instead of looking for a web 'login' route
         $exceptions->render(function (\Illuminate\Auth\AuthenticationException $e, Request $request) {
             if ($request->is('api/*')) {
