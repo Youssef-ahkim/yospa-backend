@@ -28,6 +28,11 @@ class User extends Authenticatable
         'is_active',
     ];
 
+    protected $attributes = [
+        'is_active' => true,
+        'role' => 'owner',
+    ];
+
     public function spa()
     {
         return $this->belongsTo(Spa::class);

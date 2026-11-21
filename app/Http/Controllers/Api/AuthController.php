@@ -25,6 +25,12 @@ class AuthController extends Controller
             ]);
         }
 
+        if (! $user->is_active) {
+            return response()->json([
+                'message' => 'Your account has been deactivated.',
+            ], 403);
+        }
+
         // Generate a Sanctum token for the user
         $token = $user->createToken('spa-token')->plainTextToken;
 
