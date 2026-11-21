@@ -10,10 +10,15 @@ trait BelongsToSpa
 {
     protected static function bootBelongsToSpa()
     {
-        // Automatically scope queries by spa_id if user is authenticated and belongs to a spa
+        // Automatically scope queries by spa_id if user is authenticated and belongs to a spa.
+        // Fails closed (1 = 0) if authenticated user has no spa_id.
         static::addGlobalScope('spa', function (Builder $builder) {
-            if (auth()->check() && auth()->user()->spa_id) {
-                $builder->where($builder->getModel()->getTable() . '.spa_id', auth()->user()->spa_id);
+            if (auth()->check()) {
+                if (auth()->user()->spa_id) {
+                    $builder->where($builder->getModel()->getTable() . '.spa_id', auth()->user()->spa_id);
+                } else {
+                    $builder->whereRaw('1 = 0');
+                }
             }
         });
 

@@ -15,7 +15,12 @@ class EnsureUserIsActive
         if ($user) {
             $freshUser = $user->fresh(['spa']);
 
-            if (! $freshUser || ! $freshUser->is_active || ($freshUser->spa_id && $freshUser->spa?->status === 'suspended')) {
+            if (
+                ! $freshUser
+                || ! $freshUser->is_active
+                || ($freshUser->spa_id && $freshUser->spa?->status === 'suspended')
+                || (! $freshUser->spa_id && $freshUser->role !== 'superuser')
+            ) {
                 $user->currentAccessToken()?->delete();
 
                 return response()->json([

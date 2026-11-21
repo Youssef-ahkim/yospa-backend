@@ -27,32 +27,35 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
     Route::post('/user/password', [AuthController::class, 'changePassword'])
         ->middleware('throttle:password_change');
 
-    // Staff Management (Owner and Admin only)
-    Route::middleware('role:owner,admin')->group(function () {
-        Route::get('staff', [StaffController::class, 'index']);
-        Route::post('staff', [StaffController::class, 'store']);
-        Route::patch('staff/{id}', [StaffController::class, 'update']);
+    // Tenant-scoped routes (Requires user to belong to an active spa)
+    Route::middleware('tenant')->group(function () {
+        // Staff Management (Owner and Admin only)
+        Route::middleware('role:owner,admin')->group(function () {
+            Route::get('staff', [StaffController::class, 'index']);
+            Route::post('staff', [StaffController::class, 'store']);
+            Route::patch('staff/{id}', [StaffController::class, 'update']);
+        });
+
+        // Clients: Read & Write open to all roles; Delete restricted to owner and admin
+        Route::apiResource('clients', ClientController::class)->except(['destroy']);
+        Route::delete('clients/{client}', [ClientController::class, 'destroy'])
+            ->name('clients.destroy')
+            ->middleware('role:owner,admin');
+
+        // Reservations: Read & Write open to all roles; Delete restricted to owner and admin
+        Route::apiResource('reservations', ReservationController::class)->except(['destroy']);
+        Route::delete('reservations/{reservation}', [ReservationController::class, 'destroy'])
+            ->name('reservations.destroy')
+            ->middleware('role:owner,admin');
+
+        // Services: Read open to all roles; Write/Delete restricted to owner and admin
+        Route::apiResource('services', ServiceController::class)->only(['index', 'show']);
+        Route::apiResource('services', ServiceController::class)->only(['store', 'update', 'destroy'])
+            ->middleware('role:owner,admin');
+
+        // Therapists: Read open to all roles; Write/Delete restricted to owner and admin
+        Route::apiResource('therapists', TherapistController::class)->only(['index', 'show']);
+        Route::apiResource('therapists', TherapistController::class)->only(['store', 'update', 'destroy'])
+            ->middleware('role:owner,admin');
     });
-
-    // Clients: Read & Write open to all roles; Delete restricted to owner and admin
-    Route::apiResource('clients', ClientController::class)->except(['destroy']);
-    Route::delete('clients/{client}', [ClientController::class, 'destroy'])
-        ->name('clients.destroy')
-        ->middleware('role:owner,admin');
-
-    // Reservations: Read & Write open to all roles; Delete restricted to owner and admin
-    Route::apiResource('reservations', ReservationController::class)->except(['destroy']);
-    Route::delete('reservations/{reservation}', [ReservationController::class, 'destroy'])
-        ->name('reservations.destroy')
-        ->middleware('role:owner,admin');
-
-    // Services: Read open to all roles; Write/Delete restricted to owner and admin
-    Route::apiResource('services', ServiceController::class)->only(['index', 'show']);
-    Route::apiResource('services', ServiceController::class)->only(['store', 'update', 'destroy'])
-        ->middleware('role:owner,admin');
-
-    // Therapists: Read open to all roles; Write/Delete restricted to owner and admin
-    Route::apiResource('therapists', TherapistController::class)->only(['index', 'show']);
-    Route::apiResource('therapists', TherapistController::class)->only(['store', 'update', 'destroy'])
-        ->middleware('role:owner,admin');
 });
