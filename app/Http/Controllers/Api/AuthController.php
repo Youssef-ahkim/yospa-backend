@@ -5,8 +5,10 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\ValidationException;
+use Laravel\Sanctum\PersonalAccessToken;
 
 class AuthController extends Controller
 {
@@ -58,6 +60,47 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Logged out successfully'
+        ]);
+    }
+
+    public function changePassword(Request $request)
+    {
+        $request->validate([
+            'current_password' => 'required|string',
+            'password'         => 'required|string|min:8|confirmed',
+        ]);
+
+        $user = $request->user();
+
+        // Verify current password
+        if (! Hash::check($request->current_password, $user->password)) {
+            throw ValidationException::withMessages([
+                'current_password' => ['The current password is incorrect.'],
+            ]);
+        }
+
+        // New password must differ from current password
+        if (Hash::check($request->password, $user->password)) {
+            throw ValidationException::withMessages([
+                'password' => ['The new password must be different from the current password.'],
+            ]);
+        }
+
+        DB::transaction(function () use ($user, $request) {
+            $user->password = $request->password;
+            $user->save();
+
+            // Revoke all other Sanctum tokens, keeping the current one
+            $currentToken = $user->currentAccessToken();
+            if ($currentToken instanceof PersonalAccessToken) {
+                $user->tokens()->where('id', '!=', $currentToken->id)->delete();
+            } else {
+                $user->tokens()->delete();
+            }
+        });
+
+        return response()->json([
+            'message' => 'Password updated successfully',
         ]);
     }
 }

@@ -47,5 +47,15 @@ class AppServiceProvider extends ServiceProvider
                 ], 429, $headers);
             });
         });
+
+        RateLimiter::for('password_change', function (Request $request) {
+            $userId = $request->user()?->id ?: $request->ip();
+
+            return Limit::perMinute(5)->by($userId)->response(function (Request $request, array $headers) {
+                return response()->json([
+                    'message' => 'Too many password change attempts. Please try again later.',
+                ], 429, $headers);
+            });
+        });
     }
 }

@@ -24,6 +24,8 @@ Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:lo
 Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function () {
     Route::get('/user', [AuthController::class, 'user']);
     Route::post('/logout', [AuthController::class, 'logout']);
+    Route::post('/user/password', [AuthController::class, 'changePassword'])
+        ->middleware('throttle:password_change');
 
     // Staff Management (Owner and Admin only)
     Route::middleware('role:owner,admin')->group(function () {

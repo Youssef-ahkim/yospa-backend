@@ -70,6 +70,7 @@ Indexes: (spa_id, start_time), (therapist_id)
 * `POST /api/login` — Public endpoint. Validates `email` and `password`. Refuses inactive accounts with 403 (`{"message": "Your account has been deactivated."}`). Returns `{ message, token, user }`.
 * `POST /api/logout` — Protected (`auth:sanctum`, `active`). Revokes current access token.
 * `GET /api/user` — Protected (`auth:sanctum`, `active`). Returns authenticated user profile with `spa` relation.
+* `POST /api/user/password` — Protected (`auth:sanctum`, `active`, `throttle:password_change`). Open to all roles (`owner`, `admin`, `staff`). Requires `current_password`, `password` (min 8, confirmed, different from current), `password_confirmation`. Wrong current password returns 422 (`"The current password is incorrect."`). On success, updates password hash, revokes all other Sanctum tokens while preserving current token, returns 200 `{ "message": "Password updated successfully" }`. Throttled at 5 attempts/min per user.
 
 ### Resource Routes (`routes/api.php`)
 All resource controllers run inside `Route::middleware(['auth:sanctum', 'active'])`:
