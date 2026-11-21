@@ -20,6 +20,11 @@ class Therapist extends Model
         'is_active',
     ];
 
+    protected $attributes = [
+        'is_active' => true,
+        'color'     => '#3B82F6',
+    ];
+
     protected $casts = [
         'is_active' => 'boolean',
     ];

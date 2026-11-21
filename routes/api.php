@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\ReservationController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\StaffController;
+use App\Http\Controllers\Api\TherapistController;
 use Illuminate\Support\Facades\Route;
 
 // Public Test / Health Check
@@ -46,5 +47,10 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     // Services: Read open to all roles; Write/Delete restricted to owner and admin
     Route::apiResource('services', ServiceController::class)->only(['index', 'show']);
     Route::apiResource('services', ServiceController::class)->only(['store', 'update', 'destroy'])
+        ->middleware('role:owner,admin');
+
+    // Therapists: Read open to all roles; Write/Delete restricted to owner and admin
+    Route::apiResource('therapists', TherapistController::class)->only(['index', 'show']);
+    Route::apiResource('therapists', TherapistController::class)->only(['store', 'update', 'destroy'])
         ->middleware('role:owner,admin');
 });
