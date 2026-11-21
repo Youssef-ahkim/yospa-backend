@@ -235,6 +235,22 @@ class TherapistTest extends TestCase
         ]);
         $dupUpdate->assertStatus(422)->assertJsonValidationErrors(['name']);
 
+        // Updating user_id to a user already linked to another therapist -> 422
+        $linkedUser = User::create([
+            'name'      => 'Linked User',
+            'email'     => 'linked@alpha.test',
+            'password'  => Hash::make('secret123'),
+            'spa_id'    => $this->spaA->id,
+            'role'      => 'staff',
+            'is_active' => true,
+        ]);
+        $other->update(['user_id' => $linkedUser->id]);
+
+        $updateConflictUser = $this->patchJson("/api/therapists/{$therapist->id}", [
+            'user_id' => $linkedUser->id,
+        ]);
+        $updateConflictUser->assertStatus(422)->assertJsonValidationErrors(['user_id']);
+
         // Staff cannot update -> 403
         Sanctum::actingAs($this->staffA);
         $this->patchJson("/api/therapists/{$therapist->id}", ['notes' => 'Hacked'])->assertStatus(403);

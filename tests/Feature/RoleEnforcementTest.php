@@ -125,12 +125,28 @@ class RoleEnforcementTest extends TestCase
         $this->putJson("/api/services/{$serviceId}", ['price' => 110])->assertStatus(200);
         $this->deleteJson("/api/services/{$serviceId}")->assertStatus(200);
 
-        // Admin can delete client
+        // Admin can delete client and reservation
         $client = Client::create([
             'spa_id'    => $this->spa->id,
             'full_name' => 'Admin Client',
             'phone'     => '+212600000002',
         ]);
+        $serviceForRes = Service::create([
+            'spa_id'           => $this->spa->id,
+            'name'             => 'Admin Service For Res',
+            'duration_minutes' => 60,
+            'price'            => 100,
+            'is_active'        => true,
+        ]);
+        $reservation = Reservation::create([
+            'spa_id'      => $this->spa->id,
+            'client_id'   => $client->id,
+            'service_id'  => $serviceForRes->id,
+            'start_time'  => now()->addDay(),
+            'end_time'    => now()->addDay()->addHour(),
+            'total_price' => 100,
+        ]);
+        $this->deleteJson("/api/reservations/{$reservation->id}")->assertStatus(200);
         $this->deleteJson("/api/clients/{$client->id}")->assertStatus(200);
     }
 
