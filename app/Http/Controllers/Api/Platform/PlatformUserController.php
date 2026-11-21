@@ -24,11 +24,26 @@ class PlatformUserController extends Controller
 
         $validated = $request->validate([
             'name'      => 'sometimes|string|max:255',
-            'email'     => ['sometimes', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'email'     => 'sometimes|email|max:255',
             'role'      => 'sometimes|string|in:owner,admin,staff',
             'is_active' => 'sometimes|boolean',
             'password'  => 'sometimes|string|min:8',
         ]);
+
+        if (array_key_exists('email', $validated)) {
+            $exists = User::whereRaw('LOWER(email) = ?', [strtolower($validated['email'])])
+                ->where('id', '!=', $user->id)
+                ->exists();
+
+            if ($exists) {
+                return response()->json([
+                    'message' => 'The email has already been taken.',
+                    'errors'  => [
+                        'email' => ['The email has already been taken.'],
+                    ],
+                ], 422);
+            }
+        }
 
         // 409 guard: cannot deactivate or demote the last active owner of that spa
         if ($user->role === 'owner') {

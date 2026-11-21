@@ -282,10 +282,16 @@ class PlatformSpaController extends Controller
 
         $validated = $request->validate([
             'name'     => 'required|string|max:255',
-            'email'    => 'required|email|max:255|unique:users,email',
+            'email'    => 'required|email|max:255',
             'password' => 'required|string|min:8',
             'role'     => 'required|string|in:owner,admin,staff',
         ]);
+
+        if (User::whereRaw('LOWER(email) = ?', [strtolower($validated['email'])])->exists()) {
+            throw ValidationException::withMessages([
+                'email' => ['The email has already been taken.'],
+            ]);
+        }
 
         $user = User::create([
             'name'      => $validated['name'],
