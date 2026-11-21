@@ -284,4 +284,27 @@ class RoleEnforcementTest extends TestCase
         $correctPasswordResponse->assertStatus(403)
             ->assertJson(['message' => 'Your account has been deactivated.']);
     }
+
+    // 7. User created without explicit role cannot access owner/admin routes
+    public function test_user_created_without_explicit_role_cannot_access_owner_admin_routes(): void
+    {
+        $noRoleUser = User::create([
+            'name'     => 'No Role User',
+            'email'    => 'norole@yospa.test',
+            'password' => Hash::make('password123'),
+            'spa_id'   => $this->spa->id,
+        ]);
+
+        Sanctum::actingAs($noRoleUser);
+
+        // Attempting to access owner/admin-only routes returns 403
+        $this->postJson('/api/services', [
+            'name'             => 'Unauthorized Service',
+            'duration_minutes' => 60,
+            'price'            => 100,
+        ])->assertStatus(403)->assertJson(['message' => 'Unauthorized action.']);
+
+        $this->getJson('/api/staff')
+            ->assertStatus(403)->assertJson(['message' => 'Unauthorized action.']);
+    }
 }

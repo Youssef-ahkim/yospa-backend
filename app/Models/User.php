@@ -30,7 +30,6 @@ class User extends Authenticatable
 
     protected $attributes = [
         'is_active' => true,
-        'role' => 'owner',
     ];
 
     public function spa()
