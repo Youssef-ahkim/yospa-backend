@@ -29,7 +29,9 @@ class StaffController extends Controller
             'name'     => 'required|string|max:255',
             'email'    => 'required|email|max:255|unique:users,email',
             'password' => 'required|string|min:8',
-            'role'     => 'sometimes|string|in:owner,admin,staff',
+            'role'     => ['sometimes', 'string', Rule::in(['admin', 'staff'])],
+        ], [
+            'role.in' => 'Only the platform administrator can assign the owner role.',
         ]);
 
         $role = $validated['role'] ?? 'staff';
@@ -81,6 +83,20 @@ class StaffController extends Controller
             ], 403);
         }
 
+        // Protect owners: a tenant user cannot change, deactivate, delete or reset the password of a user whose role is owner
+        if ($staff->role === 'owner' && (int) $staff->id !== (int) $currentUser->id) {
+            return response()->json([
+                'message' => 'Unauthorized action.',
+            ], 403);
+        }
+
+        // Protect owners: an owner's password cannot be reset via staff endpoint
+        if ($staff->role === 'owner' && $request->filled('password')) {
+            return response()->json([
+                'message' => 'Unauthorized action.',
+            ], 403);
+        }
+
         // Self-modification safeguards
         if ((int) $staff->id === (int) $currentUser->id) {
             // Cannot demote yourself
@@ -122,8 +138,10 @@ class StaffController extends Controller
             'name'      => 'sometimes|string|max:255',
             'email'     => ['sometimes', 'email', 'max:255', Rule::unique('users', 'email')->ignore($staff->id)],
             'password'  => 'sometimes|string|min:8',
-            'role'      => 'sometimes|string|in:owner,admin,staff',
+            'role'      => ['sometimes', 'string', Rule::in(['admin', 'staff'])],
             'is_active' => 'sometimes|boolean',
+        ], [
+            'role.in' => 'Only the platform administrator can assign the owner role.',
         ]);
 
         $data = [];

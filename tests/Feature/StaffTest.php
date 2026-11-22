@@ -177,14 +177,16 @@ class StaffTest extends TestCase
         $respAdmin->assertStatus(403)
             ->assertJson(['message' => 'Admins can only create staff accounts.']);
 
-        // Admin creating owner fails with 403
+        // Admin creating owner fails with 422 (owner role not allowed for tenant callers)
         $respOwner = $this->postJson('/api/staff', [
             'name'     => 'Owner attempt',
             'email'    => 'ownerattempt@alpha.test',
             'password' => 'password123',
             'role'     => 'owner',
         ]);
-        $respOwner->assertStatus(403);
+        $respOwner->assertStatus(422)
+            ->assertJsonValidationErrors(['role'])
+            ->assertJsonPath('errors.role.0', 'Only the platform administrator can assign the owner role.');
     }
 
     // 4. Update: cross-spa returns 404
@@ -234,11 +236,12 @@ class StaffTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Alice can deactivate second owner because Alice remains active
+        // Alice cannot deactivate second owner because tenant users cannot deactivate an owner -> 403
         $deactivateOwner2 = $this->patchJson("/api/staff/{$owner2->id}", [
             'is_active' => false,
         ]);
-        $deactivateOwner2->assertStatus(200);
+        $deactivateOwner2->assertStatus(403)
+            ->assertJson(['message' => 'Unauthorized action.']);
 
         // Now Alice is the sole active owner; create a second admin to test
         $admin2 = User::create([
@@ -250,11 +253,12 @@ class StaffTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Trying to demote sole active owner fails with 409
+        // Trying to demote another owner fails with 403
         $demoteSoleOwner = $this->patchJson("/api/staff/{$owner2->id}", [
             'role' => 'staff',
         ]);
-        $demoteSoleOwner->assertStatus(200); // owner2 was already inactive, so demoting inactive is fine
+        $demoteSoleOwner->assertStatus(403)
+            ->assertJson(['message' => 'Unauthorized action.']);
 
         // But deactivating or demoting the remaining active owner fails
         // If we reactivate owner2, then deactivating owner2 when ownerA is demoted:
