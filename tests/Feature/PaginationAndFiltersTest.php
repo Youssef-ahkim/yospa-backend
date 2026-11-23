@@ -468,4 +468,78 @@ class PaginationAndFiltersTest extends TestCase
         $this->assertNull($resStaff->json('revenue'));
         $this->assertEquals(2, $resStaff->json('today_reservations_count'));
     }
+
+    public function test_dashboard_summary_spa_timezone_alignment(): void
+    {
+        Sanctum::actingAs($this->ownerA);
+
+        $client = Client::create(['spa_id' => $this->spaA->id, 'full_name' => 'Tz Client', 'phone' => '123']);
+
+        // 1. 2026-11-23 23:30:00 UTC must count as Nov 24 (00:30 local in Africa/Casablanca) for "today":
+        Carbon::setTestNow(Carbon::parse('2026-11-23 23:30:00', 'UTC'));
+
+        $resNov24 = Reservation::create([
+            'spa_id'      => $this->spaA->id,
+            'client_id'   => $client->id,
+            'service_id'  => $this->serviceA->id,
+            'start_time'  => '2026-11-24 00:30:00',
+            'end_time'    => '2026-11-24 01:30:00',
+            'status'      => 'confirmed',
+            'total_price' => 100.00,
+        ]);
+
+        $summaryToday = $this->get('/api/dashboard/summary')->json();
+        $this->assertEquals(1, $summaryToday['today_reservations_count']);
+
+        // 2. A reservation at 15:30 local must be "upcoming" at 14:00 local and not at 16:00 local:
+        $resUpcoming = Reservation::create([
+            'spa_id'      => $this->spaA->id,
+            'client_id'   => $client->id,
+            'service_id'  => $this->serviceA->id,
+            'start_time'  => '2026-11-24 15:30:00',
+            'end_time'    => '2026-11-24 16:30:00',
+            'status'      => 'confirmed',
+            'total_price' => 150.00,
+        ]);
+
+        // At 14:00 local (13:00 UTC):
+        Carbon::setTestNow(Carbon::parse('2026-11-24 13:00:00', 'UTC'));
+        $summaryAt14 = $this->get('/api/dashboard/summary')->json();
+        $this->assertEquals(1, $summaryAt14['upcoming_count']);
+
+        // At 16:00 local (15:00 UTC):
+        Carbon::setTestNow(Carbon::parse('2026-11-24 15:00:00', 'UTC'));
+        $summaryAt16 = $this->get('/api/dashboard/summary')->json();
+        $this->assertEquals(0, $summaryAt16['upcoming_count']);
+
+        // 3. Month boundary (e.g. 2026-11-30 23:30 UTC) rolls into December for the default range:
+        Carbon::setTestNow(Carbon::parse('2026-11-30 23:30:00', 'UTC'));
+
+        // Completed reservation in November (2026-11-30 20:00:00 local)
+        Reservation::create([
+            'spa_id'      => $this->spaA->id,
+            'client_id'   => $client->id,
+            'service_id'  => $this->serviceA->id,
+            'start_time'  => '2026-11-30 20:00:00',
+            'end_time'    => '2026-11-30 21:00:00',
+            'status'      => 'completed',
+            'total_price' => 500.00,
+        ]);
+
+        // Completed reservation in December (2026-12-01 00:15:00 local)
+        Reservation::create([
+            'spa_id'      => $this->spaA->id,
+            'client_id'   => $client->id,
+            'service_id'  => $this->serviceA->id,
+            'start_time'  => '2026-12-01 00:15:00',
+            'end_time'    => '2026-12-01 01:15:00',
+            'status'      => 'completed',
+            'total_price' => 300.00,
+        ]);
+
+        $summaryDec = $this->get('/api/dashboard/summary')->json();
+        $this->assertEquals(300.00, $summaryDec['revenue']);
+
+        Carbon::setTestNow();
+    }
 }

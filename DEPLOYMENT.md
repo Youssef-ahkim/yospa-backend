@@ -14,6 +14,7 @@ Configure these variables in your production `.env` file:
 - `APP_KEY=`: Application key (generate with `php artisan key:generate --show` during initial setup).
 - `APP_DEBUG=false`: **Critical**: Must strictly be `false`. Never enable debug in production; doing so exposes environment variables, credentials, and stack traces.
 - `APP_URL=https://api.yourdomain.com`: Full HTTPS base URL of the API.
+- `SPA_TIMEZONE=Africa/Casablanca`: Local wall-clock timezone for spa operations, schedules, and dashboard summaries. Used to accurately evaluate "today", "upcoming", and current month ranges against naive datetime values without shifting UTC audit timestamps.
 
 ### Database (PostgreSQL)
 - `DB_CONNECTION=pgsql`: Database driver.

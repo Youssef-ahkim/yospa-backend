@@ -17,15 +17,18 @@ class DashboardController extends Controller
             'to'   => 'sometimes|nullable|date|after_or_equal:from',
         ]);
 
-        $today = now()->toDateString();
+        $spaTz = config('yospa.timezone', 'Africa/Casablanca');
+        $nowSpa = now($spaTz);
+        $todayStr = $nowSpa->toDateString();
+        $nowStr = $nowSpa->format('Y-m-d H:i:s');
 
         // 1. Today's appointments (excluding cancelled)
-        $todayReservationsCount = Reservation::whereDate('start_time', $today)
+        $todayReservationsCount = Reservation::whereDate('start_time', $todayStr)
             ->where('status', '!=', 'cancelled')
             ->count();
 
         // 2. Upcoming reservations (start_time >= now, excluding cancelled)
-        $upcomingCount = Reservation::where('start_time', '>=', now())
+        $upcomingCount = Reservation::where('start_time', '>=', $nowStr)
             ->where('status', '!=', 'cancelled')
             ->count();
 
@@ -41,9 +44,9 @@ class DashboardController extends Controller
                 if (strlen(trim($validated['from'])) <= 10) {
                     $from = $from->startOfDay();
                 }
-                $revenueQuery->where('start_time', '>=', $from);
+                $revenueQuery->where('start_time', '>=', $from->format('Y-m-d H:i:s'));
             } else {
-                $revenueQuery->where('start_time', '>=', now()->startOfMonth());
+                $revenueQuery->where('start_time', '>=', $nowSpa->copy()->startOfMonth()->format('Y-m-d H:i:s'));
             }
 
             if (! empty($validated['to'])) {
@@ -51,9 +54,9 @@ class DashboardController extends Controller
                 if (strlen(trim($validated['to'])) <= 10) {
                     $to = $to->endOfDay();
                 }
-                $revenueQuery->where('start_time', '<=', $to);
+                $revenueQuery->where('start_time', '<=', $to->format('Y-m-d H:i:s'));
             } else {
-                $revenueQuery->where('start_time', '<=', now()->endOfMonth());
+                $revenueQuery->where('start_time', '<=', $nowSpa->copy()->endOfMonth()->format('Y-m-d H:i:s'));
             }
 
             $revenue = round((float) ($revenueQuery->sum('total_price') ?? 0), 2);
