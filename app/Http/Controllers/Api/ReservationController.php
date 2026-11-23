@@ -14,7 +14,7 @@ use Illuminate\Validation\Rule;
 
 class ReservationController extends Controller
 {
-    private function escapeLike(string $value, string $char = '\\'): string
+    private function escapeLike(string $value, string $char = '='): string
     {
         return str_replace(
             [$char, '%', '_'],
@@ -110,11 +110,11 @@ class ReservationController extends Controller
 
         // Search client name or phone with escaped LIKE wildcards
         if ($request->filled('search')) {
-            $term = $this->escapeLike(trim($request->search));
+            $term = $this->escapeLike(trim($request->search), '=');
             $pattern = "%{$term}%";
             $query->whereHas('client', function ($q) use ($pattern) {
-                $q->whereRaw("full_name LIKE ? ESCAPE '\\'", [$pattern])
-                  ->orWhereRaw("phone LIKE ? ESCAPE '\\'", [$pattern]);
+                $q->whereRaw("full_name LIKE ? ESCAPE '='", [$pattern])
+                  ->orWhereRaw("phone LIKE ? ESCAPE '='", [$pattern]);
             });
         }
 

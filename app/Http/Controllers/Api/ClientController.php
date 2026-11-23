@@ -10,7 +10,7 @@ use Illuminate\Http\Request;
 
 class ClientController extends Controller
 {
-    private function escapeLike(string $value, string $char = '\\'): string
+    private function escapeLike(string $value, string $char = '='): string
     {
         return str_replace(
             [$char, '%', '_'],
@@ -32,12 +32,12 @@ class ClientController extends Controller
         $query = Client::query();
 
         if ($request->filled('search')) {
-            $term = $this->escapeLike(trim($request->search));
+            $term = $this->escapeLike(trim($request->search), '=');
             $pattern = "%{$term}%";
             $query->where(function ($q) use ($pattern) {
-                $q->whereRaw("full_name LIKE ? ESCAPE '\\'", [$pattern])
-                  ->orWhereRaw("phone LIKE ? ESCAPE '\\'", [$pattern])
-                  ->orWhereRaw("email LIKE ? ESCAPE '\\'", [$pattern]);
+                $q->whereRaw("full_name LIKE ? ESCAPE '='", [$pattern])
+                  ->orWhereRaw("phone LIKE ? ESCAPE '='", [$pattern])
+                  ->orWhereRaw("email LIKE ? ESCAPE '='", [$pattern]);
             });
         }
 

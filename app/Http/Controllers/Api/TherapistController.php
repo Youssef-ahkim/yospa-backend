@@ -9,7 +9,7 @@ use Illuminate\Validation\Rule;
 
 class TherapistController extends Controller
 {
-    private function escapeLike(string $value, string $char = '\\'): string
+    private function escapeLike(string $value, string $char = '='): string
     {
         return str_replace(
             [$char, '%', '_'],
@@ -36,12 +36,12 @@ class TherapistController extends Controller
         }
 
         if ($request->filled('search')) {
-            $term = $this->escapeLike(trim($request->search));
+            $term = $this->escapeLike(trim($request->search), '=');
             $pattern = "%{$term}%";
             $query->where(function ($q) use ($pattern) {
-                $q->whereRaw("name LIKE ? ESCAPE '\\'", [$pattern])
-                  ->orWhereRaw("email LIKE ? ESCAPE '\\'", [$pattern])
-                  ->orWhereRaw("phone LIKE ? ESCAPE '\\'", [$pattern]);
+                $q->whereRaw("name LIKE ? ESCAPE '='", [$pattern])
+                  ->orWhereRaw("email LIKE ? ESCAPE '='", [$pattern])
+                  ->orWhereRaw("phone LIKE ? ESCAPE '='", [$pattern]);
             });
         }
 

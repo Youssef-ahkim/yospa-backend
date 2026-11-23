@@ -10,7 +10,7 @@ use Illuminate\Validation\Rule;
 
 class StaffController extends Controller
 {
-    private function escapeLike(string $value, string $char = '\\'): string
+    private function escapeLike(string $value, string $char = '='): string
     {
         return str_replace(
             [$char, '%', '_'],
@@ -43,11 +43,11 @@ class StaffController extends Controller
         }
 
         if ($request->filled('search')) {
-            $term = $this->escapeLike(trim($request->search));
+            $term = $this->escapeLike(trim($request->search), '=');
             $pattern = "%{$term}%";
             $query->where(function ($q) use ($pattern) {
-                $q->whereRaw("name LIKE ? ESCAPE '\\'", [$pattern])
-                  ->orWhereRaw("email LIKE ? ESCAPE '\\'", [$pattern]);
+                $q->whereRaw("name LIKE ? ESCAPE '='", [$pattern])
+                  ->orWhereRaw("email LIKE ? ESCAPE '='", [$pattern]);
             });
         }
 
