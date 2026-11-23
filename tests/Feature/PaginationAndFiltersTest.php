@@ -141,9 +141,10 @@ class PaginationAndFiltersTest extends TestCase
         $res10->assertStatus(200);
         $this->assertCount(10, $res10->json('data'));
 
-        // Max cap: per_page > 100 returns 422
-        $resOver = $this->get('/api/reservations?per_page=150');
-        $resOver->assertStatus(422);
+        // Max cap: per_page=1000 is capped to 100
+        $resOver = $this->get('/api/reservations?page=1&per_page=1000');
+        $resOver->assertStatus(200);
+        $this->assertEquals(100, $resOver->json('per_page'));
     }
 
     public function test_reservations_status_filter(): void
@@ -451,5 +452,20 @@ class PaginationAndFiltersTest extends TestCase
         $this->assertEquals(1, $json['counts_by_status']['completed']);
         $this->assertEquals(1, $json['counts_by_status']['pending']);
         $this->assertEquals(0, $json['counts_by_status']['cancelled']);
+
+        // Staff user can call summary but revenue is null following price-visibility rules
+        $staffA = User::create([
+            'name'      => 'Staff Member',
+            'email'     => 'staff@alpha.test',
+            'password'  => Hash::make('password123'),
+            'spa_id'    => $this->spaA->id,
+            'role'      => 'staff',
+            'is_active' => true,
+        ]);
+        Sanctum::actingAs($staffA);
+        $resStaff = $this->get('/api/dashboard/summary');
+        $resStaff->assertStatus(200);
+        $this->assertNull($resStaff->json('revenue'));
+        $this->assertEquals(2, $resStaff->json('today_reservations_count'));
     }
 }

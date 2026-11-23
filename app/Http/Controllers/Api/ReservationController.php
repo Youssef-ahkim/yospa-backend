@@ -26,7 +26,7 @@ class ReservationController extends Controller
     {
         $request->validate([
             'page'         => 'sometimes|integer|min:1',
-            'per_page'     => 'sometimes|integer|min:1|max:100',
+            'per_page'     => 'sometimes|integer|min:1',
             'status'       => 'sometimes|nullable|string|in:pending,confirmed,completed,cancelled',
             'therapist_id' => 'sometimes|nullable|integer',
             'client_id'    => 'sometimes|nullable|integer',
@@ -114,7 +114,7 @@ class ReservationController extends Controller
 
         // Paginate only when ?page or ?per_page is present
         if ($request->has('page') || $request->has('per_page')) {
-            $perPage = (int) $request->input('per_page', 25);
+            $perPage = min((int) $request->input('per_page', 25), 100);
             return response()->json($query->paginate($perPage)->withQueryString());
         }
 

@@ -29,30 +29,35 @@ class DashboardController extends Controller
             ->where('status', '!=', 'cancelled')
             ->count();
 
-        // 3. Revenue for completed appointments (date range if provided, or current month by default)
-        $revenueQuery = Reservation::where('status', 'completed');
+        // 3. Revenue for completed appointments (restricted to owner and admin)
+        $canSeeRevenue = in_array($request->user()->role, ['owner', 'admin'], true);
+        $revenue = null;
 
-        if (! empty($validated['from'])) {
-            $from = Carbon::parse($validated['from']);
-            if (strlen(trim($validated['from'])) <= 10) {
-                $from = $from->startOfDay();
+        if ($canSeeRevenue) {
+            $revenueQuery = Reservation::where('status', 'completed');
+
+            if (! empty($validated['from'])) {
+                $from = Carbon::parse($validated['from']);
+                if (strlen(trim($validated['from'])) <= 10) {
+                    $from = $from->startOfDay();
+                }
+                $revenueQuery->where('start_time', '>=', $from);
+            } else {
+                $revenueQuery->where('start_time', '>=', now()->startOfMonth());
             }
-            $revenueQuery->where('start_time', '>=', $from);
-        } else {
-            $revenueQuery->where('start_time', '>=', now()->startOfMonth());
-        }
 
-        if (! empty($validated['to'])) {
-            $to = Carbon::parse($validated['to']);
-            if (strlen(trim($validated['to'])) <= 10) {
-                $to = $to->endOfDay();
+            if (! empty($validated['to'])) {
+                $to = Carbon::parse($validated['to']);
+                if (strlen(trim($validated['to'])) <= 10) {
+                    $to = $to->endOfDay();
+                }
+                $revenueQuery->where('start_time', '<=', $to);
+            } else {
+                $revenueQuery->where('start_time', '<=', now()->endOfMonth());
             }
-            $revenueQuery->where('start_time', '<=', $to);
-        } else {
-            $revenueQuery->where('start_time', '<=', now()->endOfMonth());
-        }
 
-        $revenue = (float) ($revenueQuery->sum('total_price') ?? 0);
+            $revenue = round((float) ($revenueQuery->sum('total_price') ?? 0), 2);
+        }
 
         // 4. Counts by status
         $rawStatusCounts = Reservation::selectRaw('status, count(*) as count')
@@ -74,7 +79,7 @@ class DashboardController extends Controller
         return response()->json([
             'today_reservations_count' => $todayReservationsCount,
             'upcoming_count'           => $upcomingCount,
-            'revenue'                  => round($revenue, 2),
+            'revenue'                  => $revenue !== null ? round($revenue, 2) : null,
             'counts_by_status'         => $countsByStatus,
             'total_clients'            => $totalClients,
             'total_reservations'       => $totalReservations,

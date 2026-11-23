@@ -21,7 +21,7 @@ class ClientController extends Controller
     {
         $request->validate([
             'page'      => 'sometimes|integer|min:1',
-            'per_page'  => 'sometimes|integer|min:1|max:100',
+            'per_page'  => 'sometimes|integer|min:1',
             'search'    => 'sometimes|nullable|string|max:255',
             'sort'      => 'sometimes|nullable|string|in:full_name,created_at,phone,email',
             'direction' => 'sometimes|nullable|string|in:asc,desc,ASC,DESC',
@@ -49,7 +49,7 @@ class ClientController extends Controller
         $query->orderBy($sort, $direction)->orderBy('id', $direction);
 
         if ($request->has('page') || $request->has('per_page')) {
-            $perPage = (int) $request->input('per_page', 25);
+            $perPage = min((int) $request->input('per_page', 25), 100);
             return response()->json($query->paginate($perPage)->withQueryString());
         }
 

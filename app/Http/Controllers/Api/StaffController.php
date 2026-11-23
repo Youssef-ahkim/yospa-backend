@@ -23,7 +23,7 @@ class StaffController extends Controller
     {
         $request->validate([
             'page'      => 'sometimes|integer|min:1',
-            'per_page'  => 'sometimes|integer|min:1|max:100',
+            'per_page'  => 'sometimes|integer|min:1',
             'all'       => 'sometimes|boolean',
             'role'      => 'sometimes|nullable|string|in:owner,admin,staff',
             'search'    => 'sometimes|nullable|string|max:255',
@@ -60,7 +60,7 @@ class StaffController extends Controller
         $query->orderBy($sort, $direction)->orderBy('id', $direction);
 
         if ($request->has('page') || $request->has('per_page')) {
-            $perPage = (int) $request->input('per_page', 25);
+            $perPage = min((int) $request->input('per_page', 25), 100);
             return response()->json($query->paginate($perPage)->withQueryString());
         }
 
