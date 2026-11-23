@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\ClientController;
+use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\Platform\PlatformAuditController;
 use App\Http\Controllers\Api\Platform\PlatformSpaController;
 use App\Http\Controllers\Api\Platform\PlatformStatsController;
@@ -33,6 +34,9 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
 
     // Tenant-scoped routes (Requires user to belong to an active spa)
     Route::middleware('tenant')->group(function () {
+        // Dashboard aggregate summary
+        Route::get('dashboard/summary', [DashboardController::class, 'summary']);
+
         // Staff Management (Owner and Admin only)
         Route::middleware('role:owner,admin')->group(function () {
             Route::get('staff', [StaffController::class, 'index']);

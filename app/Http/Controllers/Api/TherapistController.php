@@ -9,15 +9,56 @@ use Illuminate\Validation\Rule;
 
 class TherapistController extends Controller
 {
+    private function escapeLike(string $value, string $char = '\\'): string
+    {
+        return str_replace(
+            [$char, '%', '_'],
+            [$char.$char, $char.'%', $char.'_'],
+            $value
+        );
+    }
+
     public function index(Request $request)
     {
-        $query = Therapist::query()->orderBy('name');
+        $request->validate([
+            'page'      => 'sometimes|integer|min:1',
+            'per_page'  => 'sometimes|integer|min:1|max:100',
+            'all'       => 'sometimes|boolean',
+            'search'    => 'sometimes|nullable|string|max:255',
+            'sort'      => 'sometimes|nullable|string|in:name,created_at,email,phone',
+            'direction' => 'sometimes|nullable|string|in:asc,desc,ASC,DESC',
+        ]);
+
+        $query = Therapist::query();
 
         if (! $request->boolean('all')) {
             $query->where('is_active', true);
         }
 
-        return response()->json($query->get());
+        if ($request->filled('search')) {
+            $term = $this->escapeLike(trim($request->search));
+            $pattern = "%{$term}%";
+            $query->where(function ($q) use ($pattern) {
+                $q->whereRaw("name LIKE ? ESCAPE '\\'", [$pattern])
+                  ->orWhereRaw("email LIKE ? ESCAPE '\\'", [$pattern])
+                  ->orWhereRaw("phone LIKE ? ESCAPE '\\'", [$pattern]);
+            });
+        }
+
+        $sort = $request->input('sort', 'name');
+        $direction = strtolower($request->input('direction', 'asc'));
+        if (! in_array($direction, ['asc', 'desc'], true)) {
+            $direction = 'asc';
+        }
+
+        $query->orderBy($sort, $direction)->orderBy('id', $direction);
+
+        if ($request->has('page') || $request->has('per_page')) {
+            $perPage = (int) $request->input('per_page', 25);
+            return response()->json($query->paginate($perPage)->withQueryString());
+        }
+
+        return response()->json($query->get())->header('X-Legacy-Unpaginated', '1');
     }
 
     public function store(Request $request)

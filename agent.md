@@ -100,15 +100,24 @@ Protected by `['auth:sanctum', 'active', 'role:superuser', 'throttle:60,1']`. Ze
 ### Resource Routes (`routes/api.php`)
 All resource controllers run inside `Route::middleware(['auth:sanctum', 'active'])`:
 
+#### Dashboard Aggregates (`Api\DashboardController`)
+* `GET /api/dashboard/summary` — Open to all tenant roles (`owner`, `admin`, `staff`). Returns server-computed SQL aggregates strictly scoped to the authenticated user's `spa_id`:
+  * `today_reservations_count`: count of reservations where `DATE(start_time) = TODAY` and `status != 'cancelled'`.
+  * `upcoming_count`: count of future reservations where `start_time >= NOW` and `status != 'cancelled'`.
+  * `revenue`: sum of `total_price` for `completed` reservations (filtered by optional `?from` and `?to` date range, or defaults to current month).
+  * `counts_by_status`: map of reservation counts `{ pending, confirmed, completed, cancelled }`.
+  * `total_clients`: total count of clients.
+  * `total_reservations`: total count of reservations.
+
 #### Staff Accounts (`Api\StaffController`) — Owner & Admin Only
-* `GET /api/staff` — Returns list of staff members for the authenticated user's `spa_id` ordered by `name`. Defaults to active staff only; pass `?all=1` to include inactive. Fields: `id`, `name`, `email`, `role`, `is_active`.
+* `GET /api/staff` — Returns list of staff members for the authenticated user's `spa_id` ordered by `name`. Defaults to active staff only; pass `?all=1` to include inactive. Supports `?page`, `?per_page` (1-100, default 25), `?role=owner|admin|staff`, `?search` (name/email with escaped wildcards), `?sort=name|email|role|created_at`, `?direction=asc|desc`. When pagination params are omitted, returns legacy flat array with header `X-Legacy-Unpaginated: 1`.
 * `POST /api/staff` — Creates user auto-bound to active `spa_id`. Password hashed. Role defaults to `staff`. Admins can only create `staff` role accounts (403 otherwise). Returns 201 `{ message, staff }`.
 * `PATCH /api/staff/{id}` — Updates user attributes. Cross-tenant IDs return 404.
   * **Safeguards:** Self-demotion (422) and self-deactivation (422) rejected; removing the last active owner rejected with 409; admins cannot modify, deactivate, or reset password of owner/admin accounts (403). Deactivation or password reset revokes all of the target user's active tokens.
 * *No delete route is exposed.*
 
 #### Therapists (`Api\TherapistController`)
-* `GET /api/therapists` — Plain array of therapists ordered by `name`. Default active only; pass `?all=1` to include inactive. Open to all roles (`owner`, `admin`, `staff`).
+* `GET /api/therapists` — Plain array or paginated list of therapists ordered by `name` (tiebreaker `id`). Default active only; pass `?all=1` to include inactive. Supports `?page`, `?per_page` (1-100, default 25), `?search` (name, email, phone with escaped wildcards), `?sort=name|created_at|email|phone`, `?direction=asc|desc`. Returns paginator object when `?page` or `?per_page` present; flat array with `X-Legacy-Unpaginated: 1` otherwise. Open to all roles (`owner`, `admin`, `staff`).
 * `GET /api/therapists/{id}` — Returns therapist object. Open to all roles. Cross-tenant IDs return 404.
 * `POST /api/therapists` — Creates therapist (Owner & Admin only). Validates `name` (case-insensitive unique per spa via `LOWER(name)`), `color` (hex regex `#RRGGBB`), and optional `user_id` (must belong to same spa and not already linked). Returns 201 `{ message, therapist }`.
 * `PUT|PATCH /api/therapists/{id}` — Updates therapist (Owner & Admin only). Same validation marked `sometimes` (unique rules ignore self). Returns 200 `{ message, therapist }`.
@@ -118,7 +127,8 @@ All resource controllers run inside `Route::middleware(['auth:sanctum', 'active'
   * Deletes record and returns 200 `{ "message": "Therapist deleted successfully" }` when no reservations exist.
 
 #### Clients (`Api\ClientController`)
-* `GET /api/clients` & `GET /api/clients/{id}` — Open to all roles. Scoped to authenticated user's `spa_id`.
+* `GET /api/clients` — Open to all roles. Scoped to authenticated user's `spa_id`. Supports `?page`, `?per_page` (1-100, default 25), `?search` (name, phone, email with escaped wildcards), stable ordering `full_name` asc, `id` asc (or `?sort` & `?direction`). Returns paginator object when `?page` or `?per_page` present; flat array with `X-Legacy-Unpaginated: 1` otherwise.
+* `GET /api/clients/{id}` — Open to all roles. Returns client object.
 * `POST /api/clients` & `PUT|PATCH /api/clients/{id}` — Open to all roles. Returns `{ message, client }`.
 * `DELETE /api/clients/{id}` — Restricted to `owner` and `admin` only (`role:owner,admin`). Staff receives 403.
 
@@ -129,8 +139,17 @@ All resource controllers run inside `Route::middleware(['auth:sanctum', 'active'
 * `DELETE /api/services/{id}` — Restricted to `owner` and `admin` only (`role:owner,admin`). Blocked with 409 if reservations exist. Staff receives 403.
 
 #### Reservations (`Api\ReservationController`)
-* All responses (`index`, `show`, `store`, `update`) eager-load `client`, `service`, and `therapist` (`id`, `name`, `color`).
-* `GET /api/reservations` & `GET /api/reservations/{id}` — Open to all roles.
+* All responses (`index`, `show`, `store`, `update`) eager-load `client`, `service`, and `therapist` (`id`, `name`, `color`) with constant query count (no N+1).
+* `GET /api/reservations` — Open to all roles. Supports:
+  * `?page`, `?per_page` (1-100, default 25)
+  * `?status=pending|confirmed|completed|cancelled`
+  * `?therapist_id` (validated against caller's spa; foreign ID returns 422)
+  * `?client_id` (validated against caller's spa; foreign ID returns 422)
+  * `?from` & `?to` (inclusive date range on `start_time`, validated `from <= to`)
+  * `?search` (client full_name and phone with escaped LIKE wildcards)
+  * `?sort=start_time|created_at|status|total_price` (whitelisted, default `start_time`), `?direction=asc|desc` (default `desc`), `id` tiebreaker
+  * Returns Laravel LengthAwarePaginator object when `?page` or `?per_page` present; flat array with `X-Legacy-Unpaginated: 1` otherwise.
+* `GET /api/reservations/{id}` — Open to all roles.
 * `POST /api/reservations` — Open to all roles.
   * **Validation Rules:**
     * `client_id`: `required|exists:clients,id` scoped to current `spa_id`.
