@@ -542,4 +542,82 @@ class PaginationAndFiltersTest extends TestCase
 
         Carbon::setTestNow();
     }
+
+    public function test_reservation_naive_datetime_serialization_and_roundtrip(): void
+    {
+        Sanctum::actingAs($this->ownerA);
+
+        $client = Client::create(['spa_id' => $this->spaA->id, 'full_name' => 'Serial Client', 'phone' => '12345']);
+
+        // (a) POST a reservation with start_time "2026-11-23 14:00:00" and assert response has "2026-11-23T14:00:00" with no Z
+        $postRes = $this->postJson('/api/reservations', [
+            'client_id'    => $client->id,
+            'service_id'   => $this->serviceA->id,
+            'therapist_id' => $this->therapistA1->id,
+            'start_time'   => '2026-11-23 14:00:00',
+            'end_time'     => '2026-11-23 15:00:00',
+            'total_price'  => 150.00,
+        ]);
+
+        $postRes->assertStatus(201);
+        $this->assertEquals('2026-11-23T14:00:00', $postRes->json('reservation.start_time'));
+        $this->assertEquals('2026-11-23T15:00:00', $postRes->json('reservation.end_time'));
+        $this->assertStringNotContainsString('Z', $postRes->json('reservation.start_time'));
+
+        $resId = $postRes->json('reservation.id');
+
+        // GET endpoint also returns "2026-11-23T14:00:00" with no Z
+        $getRes = $this->get("/api/reservations/{$resId}");
+        $getRes->assertStatus(200);
+        $this->assertEquals('2026-11-23T14:00:00', $getRes->json('start_time'));
+        $this->assertEquals('2026-11-23T15:00:00', $getRes->json('end_time'));
+        $this->assertStringNotContainsString('Z', $getRes->json('start_time'));
+
+        // (b) PATCH the same reservation with the exact string it returned and assert stored time is unchanged (round trip, repeat twice)
+        for ($i = 0; $i < 2; $i++) {
+            $returnedStart = $getRes->json('start_time');
+            $returnedEnd = $getRes->json('end_time');
+
+            $patchRes = $this->patchJson("/api/reservations/{$resId}", [
+                'start_time' => $returnedStart,
+                'end_time'   => $returnedEnd,
+            ]);
+            $patchRes->assertStatus(200);
+            $this->assertEquals('2026-11-23T14:00:00', $patchRes->json('reservation.start_time'));
+            $this->assertEquals('2026-11-23T15:00:00', $patchRes->json('reservation.end_time'));
+
+            // Check database raw value directly
+            $rawDb = DB::table('reservations')->where('id', $resId)->first();
+            $this->assertStringStartsWith('2026-11-23 14:00:00', (string) $rawDb->start_time);
+            $this->assertStringStartsWith('2026-11-23 15:00:00', (string) $rawDb->end_time);
+
+            $getRes = $this->get("/api/reservations/{$resId}");
+        }
+
+        // (c) The API still accepts both "2026-11-23 14:00:00" and "2026-11-23T14:00:00" on input
+        $patchWithSpace = $this->patchJson("/api/reservations/{$resId}", [
+            'start_time' => '2026-11-23 16:00:00',
+            'end_time'   => '2026-11-23 17:00:00',
+        ]);
+        $patchWithSpace->assertStatus(200);
+        $this->assertEquals('2026-11-23T16:00:00', $patchWithSpace->json('reservation.start_time'));
+
+        $patchWithT = $this->patchJson("/api/reservations/{$resId}", [
+            'start_time' => '2026-11-23T18:00:00',
+            'end_time'   => '2026-11-23T19:00:00',
+        ]);
+        $patchWithT->assertStatus(200);
+        $this->assertEquals('2026-11-23T18:00:00', $patchWithT->json('reservation.start_time'));
+
+        // (d) A reservation nested under a client or therapist response has the same format
+        $clientWithReservations = Client::with('reservations')->find($client->id);
+        $clientJson = $clientWithReservations->toArray();
+        $this->assertEquals('2026-11-23T18:00:00', $clientJson['reservations'][0]['start_time']);
+        $this->assertStringNotContainsString('Z', $clientJson['reservations'][0]['start_time']);
+
+        $therapistWithReservations = Therapist::with('reservations')->find($this->therapistA1->id);
+        $therapistJson = $therapistWithReservations->toArray();
+        $this->assertEquals('2026-11-23T18:00:00', $therapistJson['reservations'][0]['start_time']);
+        $this->assertStringNotContainsString('Z', $therapistJson['reservations'][0]['start_time']);
+    }
 }

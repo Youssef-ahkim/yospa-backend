@@ -22,8 +22,8 @@ class Reservation extends Model
     ];
 
     protected $casts = [
-        'start_time' => 'datetime',
-        'end_time' => 'datetime',
+        'start_time' => 'datetime:Y-m-d\TH:i:s',
+        'end_time' => 'datetime:Y-m-d\TH:i:s',
         'total_price' => 'decimal:2',
     ];
 
