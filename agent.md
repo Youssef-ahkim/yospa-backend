@@ -128,7 +128,7 @@ All resource controllers run inside `Route::middleware(['auth:sanctum', 'active'
 
 #### Clients (`Api\ClientController`)
 * `GET /api/clients` — Open to all roles. Scoped to authenticated user's `spa_id`. Supports `?page`, `?per_page` (1-100, default 25), `?search` (name, phone, email with escaped wildcards), stable ordering `full_name` asc, `id` asc (or `?sort` & `?direction`). Returns paginator object when `?page` or `?per_page` present; flat array with `X-Legacy-Unpaginated: 1` otherwise.
-* `GET /api/clients/{id}` — Open to all roles. Returns client object.
+* `GET /api/clients/{id}` — Open to all roles. Scoped to authenticated user's `spa_id` (cross-tenant returns 404). Returns client object along with a server-computed `stats` object: `{ total_reservations, completed_count, cancelled_count, upcoming_count, last_visit, total_spent }`. Aggregates are computed via SQL without N+1. `total_spent` is restricted to `owner` and `admin` (`null` for `staff`); `upcoming_count` uses naive-local time comparison against `config('yospa.timezone')` excluding cancelled appointments.
 * `POST /api/clients` & `PUT|PATCH /api/clients/{id}` — Open to all roles. Returns `{ message, client }`.
 * `DELETE /api/clients/{id}` — Restricted to `owner` and `admin` only (`role:owner,admin`). Staff receives 403.
 
