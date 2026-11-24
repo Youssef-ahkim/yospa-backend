@@ -34,8 +34,10 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
 
     // Tenant-scoped routes (Requires user to belong to an active spa)
     Route::middleware('tenant')->group(function () {
-        // Dashboard aggregate summary
+        // Dashboard aggregate summary and reporting
         Route::get('dashboard/summary', [DashboardController::class, 'summary']);
+        Route::get('dashboard/sales-report', [DashboardController::class, 'salesReport']);
+        Route::get('dashboard/best-sellers', [DashboardController::class, 'bestSellers']);
 
         // Staff Management (Owner and Admin only)
         Route::middleware('role:owner,admin')->group(function () {
