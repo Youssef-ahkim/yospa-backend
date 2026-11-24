@@ -6,11 +6,13 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\Platform\PlatformAuditController;
 use App\Http\Controllers\Api\Platform\PlatformSpaController;
 use App\Http\Controllers\Api\Platform\PlatformStatsController;
+use App\Http\Controllers\Api\Platform\PlatformTicketController;
 use App\Http\Controllers\Api\Platform\PlatformUserController;
 use App\Http\Controllers\Api\ReservationController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\StaffController;
 use App\Http\Controllers\Api\TherapistController;
+use App\Http\Controllers\Api\TicketController;
 use Illuminate\Support\Facades\Route;
 
 // Public Test / Health Check
@@ -44,6 +46,13 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
             Route::get('staff', [StaffController::class, 'index']);
             Route::post('staff', [StaffController::class, 'store']);
             Route::patch('staff/{id}', [StaffController::class, 'update']);
+
+            // Support Tickets
+            Route::get('tickets', [TicketController::class, 'index']);
+            Route::post('tickets', [TicketController::class, 'store']);
+            Route::get('tickets/{ticket}', [TicketController::class, 'show']);
+            Route::post('tickets/{ticket}/messages', [TicketController::class, 'storeMessage']);
+            Route::patch('tickets/{ticket}/close', [TicketController::class, 'close']);
         });
 
         // Clients: Read & Write open to all roles; Delete restricted to owner and admin
@@ -80,5 +89,11 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
         Route::post('spas/{id}/users', [PlatformSpaController::class, 'storeUser']);
         Route::patch('users/{id}', [PlatformUserController::class, 'update']);
         Route::get('audit', [PlatformAuditController::class, 'index']);
+
+        // Platform Support Tickets
+        Route::get('tickets', [PlatformTicketController::class, 'index']);
+        Route::get('tickets/{id}', [PlatformTicketController::class, 'show']);
+        Route::patch('tickets/{id}', [PlatformTicketController::class, 'update']);
+        Route::post('tickets/{id}/messages', [PlatformTicketController::class, 'storeMessage']);
     });
 });

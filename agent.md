@@ -96,6 +96,10 @@ Protected by `['auth:sanctum', 'active', 'role:superuser', 'throttle:60,1']`. Ze
 * `PATCH /api/platform/users/{id}` — Updates spa user (`name`, `email`, `role`, `is_active`, optional `password`).
   * **Guards:** 404 for superuser or spa-less users; 409 when deactivating or demoting the last active owner of that spa; revokes active tokens on deactivation, role change, or password reset.
 * `GET /api/platform/audit` — Returns recent platform audit logs (`latest('id')`, default limit 50, max 100). Meta never exposes secrets.
+* `GET /api/platform/tickets` — Cross-spa support ticket list using `withoutGlobalScopes()`. Eager loads `spa:id,name,slug`, `creator:id,name,email,role`, and `messages_count`. Supports `?page`, `?per_page` (1-100, default 25), `?status=open|in_progress|resolved|closed`, `?priority=low|medium|high`, `?category=bug|billing|feature|other`, `?spa_id`, and `?search` (LIKE matching on subject, description, or spa name). Ordered by `created_at desc, id desc`.
+* `GET /api/platform/tickets/{id}` — Single ticket detail across any spa with `spa`, `creator`, full `messages.user`, and `messages_count`. Returns 404 if not found.
+* `PATCH /api/platform/tickets/{id}` — Updates ticket `status` (`open|in_progress|resolved|closed`) and/or `priority` (`low|medium|high`). Transitioning `status` to `resolved` sets `resolved_at = now()`; reopening to `open` or `in_progress` sets `resolved_at = null`. Writes to `platform_audit_logs` (`action: ticket.updated`). Returns 200 `{ message, ticket }`.
+* `POST /api/platform/tickets/{id}/messages` — Replies to a ticket across any spa. Payload: `{ body (required, max 5000) }`. Sets `is_platform_reply: true`. If ticket is `open`, auto-transitions status to `in_progress`. Writes to `platform_audit_logs` (`action: ticket.replied`). Returns 201 `{ message, ticket_message, ticket }`.
 
 ### Resource Routes (`routes/api.php`)
 All resource controllers run inside `Route::middleware(['auth:sanctum', 'active'])`:
@@ -163,6 +167,14 @@ All resource controllers run inside `Route::middleware(['auth:sanctum', 'active'
     * `total_price`: `required|numeric|min:0`
 * `PUT|PATCH /api/reservations/{id}` — Open to all roles. Inactive service or therapist validation applies only if the respective ID is being changed. `therapist_id: null` unassigns.
 * `DELETE /api/reservations/{id}` — Restricted to `owner` and `admin` only (`role:owner,admin`). Staff receives 403.
+
+#### Support Tickets (`Api\TicketController`) — Owner & Admin Only
+* Restricted to `owner` and `admin` (`role:owner,admin`). Staff receives 403. Automatically scoped to tenant's `spa_id` via `BelongsToSpa`.
+* `GET /api/tickets` — Paginated list of tickets for current spa with `creator:id,name,email,role` and `messages_count`. Supports `?page`, `?per_page` (1-100, default 25), `?status=open|in_progress|resolved|closed`, `?priority=low|medium|high`, `?category=bug|billing|feature|other`, `?search` (LIKE on subject and description). Ordered by `created_at desc, id desc`.
+* `POST /api/tickets` — Creates new ticket. Payload: `{ subject (required, max 255), category (required, bug|billing|feature|other), priority (optional, low|medium|high, default medium), description (required, max 5000) }`. Auto-assigns `created_by_user_id: auth()->id()`, `status: open`, and `spa_id` via `BelongsToSpa`. Returns 201 `{ message, ticket }`.
+* `GET /api/tickets/{id}` — Full ticket details scoped to current spa with `creator`, `messages.user`, and `messages_count`. Other spa's ticket returns 404.
+* `POST /api/tickets/{id}/messages` — Appends user reply. Payload: `{ body (required, max 5000) }`. Sets `is_platform_reply: false`. Rejects replies on closed tickets with 422 `{ "message": "Cannot reply to a closed ticket." }`. Returns 201 `{ message, ticket_message }`.
+* `PATCH /api/tickets/{id}/close` — Closes ticket. Updates `status: closed`. Returns 200 `{ message, ticket }`.
 
 ---
 

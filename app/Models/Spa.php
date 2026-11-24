@@ -36,5 +36,10 @@ class Spa extends Model
     {
         return $this->hasMany(Therapist::class);
     }
+
+    public function tickets()
+    {
+        return $this->hasMany(Ticket::class);
+    }
 }
 
