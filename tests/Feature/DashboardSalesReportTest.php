@@ -189,6 +189,11 @@ class DashboardSalesReportTest extends TestCase
         $res1d->assertStatus(200);
         $json1d = $res1d->json();
 
+        // Top-level "now" must reflect spa timezone (Africa/Casablanca = UTC+1 -> 2026-11-24 00:30:00, not UTC 2026-11-23 23:30:00)
+        $this->assertArrayHasKey('now', $json1d);
+        $this->assertEquals('2026-11-24 00:30:00', $json1d['now']);
+        $this->assertNotEquals('2026-11-23 23:30:00', $json1d['now']);
+
         $bucket0 = $json1d['buckets'][0];
         $this->assertEquals('00:00', $bucket0['label']);
         $this->assertEquals('2026-11-24 00:00:00', $bucket0['start']);
@@ -527,5 +532,22 @@ class DashboardSalesReportTest extends TestCase
 
         $this->assertEquals($queriesReportFew, $queriesReportMany, 'Sales report query count must stay constant');
         $this->assertEquals($queriesBestFew, $queriesBestMany, 'Best sellers query count must stay constant');
+    }
+
+    public function test_sales_report_includes_top_level_now_in_spa_timezone(): void
+    {
+        Sanctum::actingAs($this->ownerA);
+
+        // 2026-11-24 10:15:30 UTC -> in Africa/Casablanca (UTC+1) local wall-clock time is 2026-11-24 11:15:30
+        Carbon::setTestNow(Carbon::parse('2026-11-24 10:15:30', 'UTC'));
+
+        $res = $this->get('/api/dashboard/sales-report?range=7d');
+        $res->assertStatus(200);
+
+        $json = $res->json();
+        $this->assertArrayHasKey('now', $json);
+        $this->assertEquals('2026-11-24 11:15:30', $json['now']);
+        $this->assertNotEquals('2026-11-24 10:15:30', $json['now']);
+        $this->assertMatchesRegularExpression('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $json['now']);
     }
 }

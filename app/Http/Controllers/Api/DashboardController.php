@@ -230,6 +230,7 @@ class DashboardController extends Controller
             'range'   => $range,
             'from'    => $fromStr,
             'to'      => $toStr,
+            'now'     => $nowSpa->format('Y-m-d H:i:s'),
             'buckets' => $buckets,
             'totals'  => $totals,
         ]);
