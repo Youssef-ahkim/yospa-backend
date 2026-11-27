@@ -22,7 +22,7 @@ Data isolation across tenants is enforced at the Eloquent ORM level via a global
 * **Query Filtering:** Automatically appends `WHERE spa_id = auth()->user()->spa_id` to all Eloquent queries when a user belongs to a spa.
 * **Fail-Closed Security:** If an authenticated user has `spa_id = null` (e.g., superuser), the trait strictly appends `WHERE 1 = 0` (fail-closed), guaranteeing zero tenant data exposure even if tenant routes are accidentally accessed.
 * **Auto-Assignment:** Automatically assigns `model->spa_id = auth()->user()->spa_id` during the `creating` event on standard record insertion.
-* **Tenant Models:** `Client`, `Service`, `Reservation`, `Therapist`. (The `User` model belongs to a `Spa` via `spa_id` foreign key and relation).
+* **Tenant Models:** `Client`, `Service`, `Reservation`, `Therapist`, `Ticket`, `Product`. (The `User` model belongs to a `Spa` via `spa_id` foreign key and relation).
 
 > **Crucial Rule for Agents:** Never disable global scopes (`withoutGlobalScopes()`) unless explicitly writing superuser platform management endpoints.
 
@@ -50,6 +50,16 @@ id (PK), spa_id (FK -> spas.id), full_name, phone, email, notes, created_at, upd
 [ services ]
 id (PK), spa_id (FK -> spas.id), name, description (nullable text), duration_minutes (int, default 60), price (decimal 10,2), is_active (boolean, default true), created_at, updated_at
 Unique index: (spa_id, name)
+
+[ products ]
+id (PK), spa_id (FK -> spas.id), name, sku (nullable string 100), unit (string 30, default 'unit'), price (decimal 10,2, default 0), stock_quantity (integer, default 0), low_stock_threshold (integer, default 5), description (nullable text), is_active (boolean, default true), created_at, updated_at
+Indexes: (spa_id, is_active), (spa_id, name)
+Unique index: (spa_id, sku)
+
+[ reservation_products ]
+id (PK), reservation_id (FK -> reservations.id, onDelete cascade), product_id (FK -> products.id, onDelete restrict), quantity (unsigned integer), unit_price (decimal 10,2), created_at, updated_at
+Unique index: (reservation_id, product_id)
+Index: (product_id)
 
 [ reservations ]
 id (PK), spa_id (FK -> spas.id), client_id (FK -> clients.id), service_id (FK -> services.id), therapist_id (nullable FK -> therapists.id, nullOnDelete),
@@ -144,8 +154,14 @@ All resource controllers run inside `Route::middleware(['auth:sanctum', 'active'
 * `POST /api/services` & `PUT|PATCH /api/services/{id}` — Restricted to `owner` and `admin` only (`role:owner,admin`). Validates `name` (tenant-unique case-insensitively), `duration_minutes` (5-1440), `price` (min 0). Staff receives 403.
 * `DELETE /api/services/{id}` — Restricted to `owner` and `admin` only (`role:owner,admin`). Blocked with 409 if reservations exist. Staff receives 403.
 
+#### Products (`Api\ProductController`)
+* `GET /api/products` — Open to all roles (`owner`, `admin`, `staff`). Scoped to authenticated user's `spa_id`. Supports `?page`, `?per_page` (1-100, default 25), `?all=1` (defaults to active only unless `?all=1`), `?low_stock=1` (filters `stock_quantity <= low_stock_threshold`), `?search` (escaped LIKE on `name` and `sku`), `?sort=name|price|stock_quantity|created_at` (default `name`), `?direction=asc|desc` (default `asc`), tiebreaker `id`. Returns paginator object when `?page` or `?per_page` present; flat array with `X-Legacy-Unpaginated: 1` otherwise.
+* `GET /api/products/{id}` — Returns product object. Open to all roles. Cross-tenant IDs return 404.
+* `POST /api/products` & `PUT|PATCH /api/products/{id}` — Restricted to `owner` and `admin` only (`role:owner,admin`). Staff receives 403. Validates `name` (tenant-unique case-insensitively via `LOWER(name)`), `sku` (nullable, tenant-unique case-insensitively when non-empty), `unit` (string max 30, default 'unit'), `price` (min 0), `stock_quantity` (min 0), `low_stock_threshold` (min 0), `description` (max 2000), `is_active` (boolean). Returns 201 `{ message, product }` on create; 200 `{ message, product }` on update.
+* `DELETE /api/products/{id}` — Restricted to `owner` and `admin` only (`role:owner,admin`). Staff receives 403. Blocked with 409 conflict if referenced in `reservation_products` (`{"message": "This product is used in existing reservations and can't be deleted. Deactivate it instead."}`). Returns 200 on success.
+
 #### Reservations (`Api\ReservationController`)
-* All responses (`index`, `show`, `store`, `update`) eager-load `client`, `service`, and `therapist` (`id`, `name`, `color`) with constant query count (no N+1).
+* All responses (`index`, `show`, `store`, `update`) eager-load `client`, `service`, `therapist` (`id`, `name`, `color`), and `products` (`id`, `name`, `sku`, `unit`, `price`, `pivot: { quantity, unit_price }`) with constant query count (no N+1).
 * `GET /api/reservations` — Open to all roles. Supports:
   * `?page`, `?per_page` (1-100, default 25)
   * `?status=pending|confirmed|completed|cancelled`
@@ -165,8 +181,15 @@ All resource controllers run inside `Route::middleware(['auth:sanctum', 'active'
     * `end_time`: `required|date|after:start_time`
     * `status`: `sometimes|string|in:pending,confirmed,completed,cancelled`
     * `total_price`: `required|numeric|min:0`
-* `PUT|PATCH /api/reservations/{id}` — Open to all roles. Inactive service or therapist validation applies only if the respective ID is being changed. `therapist_id: null` unassigns.
-* `DELETE /api/reservations/{id}` — Restricted to `owner` and `admin` only (`role:owner,admin`). Staff receives 403.
+    * `products`: `sometimes|array`
+    * `products.*.product_id`: `required|integer` (scoped to current `spa_id`; foreign ID returns 422)
+    * `products.*.quantity`: `required|integer|min:1`
+  * **Product Attachment & Stock Sync on Store:**
+    * Inactive products rejected with 422 (`"One or more selected products are not available."`).
+    * Insufficient stock on non-cancelled reservations rejected with 422 (`"Insufficient stock for <Name> (available: X)."`).
+    * Attaches `reservation_products` with snapshot `unit_price = product.price` and `quantity`. If status != `cancelled`, decrements `stock_quantity`.
+* `PUT|PATCH /api/reservations/{id}` — Open to all roles. Inactive service or therapist validation applies only if the respective ID is being changed. `therapist_id: null` unassigns. Accepts optional `products` array; computes stock delta against previous consumed stock; restores stock if cancelled, deducts if active, preserves historical `unit_price` for existing products while snapshotting price for new products.
+* `DELETE /api/reservations/{id}` — Restricted to `owner` and `admin` only (`role:owner,admin`). Staff receives 403. Restores stock for attached products if reservation status was not `cancelled`, then deletes reservation.
 
 #### Support Tickets (`Api\TicketController`) — Owner & Admin Only
 * Restricted to `owner` and `admin` (`role:owner,admin`). Staff receives 403. Automatically scoped to tenant's `spa_id` via `BelongsToSpa`.

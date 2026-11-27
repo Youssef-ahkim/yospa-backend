@@ -41,5 +41,13 @@ class Reservation extends Model
     {
         return $this->belongsTo(Therapist::class);
     }
+
+    public function products()
+    {
+        return $this->belongsToMany(Product::class, 'reservation_products')
+            ->using(ReservationProduct::class)
+            ->withPivot(['id', 'quantity', 'unit_price'])
+            ->withTimestamps();
+    }
 }
 

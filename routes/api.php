@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\Platform\PlatformSpaController;
 use App\Http\Controllers\Api\Platform\PlatformStatsController;
 use App\Http\Controllers\Api\Platform\PlatformTicketController;
 use App\Http\Controllers\Api\Platform\PlatformUserController;
+use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\ReservationController;
 use App\Http\Controllers\Api\ServiceController;
 use App\Http\Controllers\Api\StaffController;
@@ -75,6 +76,11 @@ Route::middleware(['auth:sanctum', 'active', 'throttle:api'])->group(function ()
         // Therapists: Read open to all roles; Write/Delete restricted to owner and admin
         Route::apiResource('therapists', TherapistController::class)->only(['index', 'show']);
         Route::apiResource('therapists', TherapistController::class)->only(['store', 'update', 'destroy'])
+            ->middleware('role:owner,admin');
+
+        // Products: Read open to all roles; Write/Delete restricted to owner and admin
+        Route::apiResource('products', ProductController::class)->only(['index', 'show']);
+        Route::apiResource('products', ProductController::class)->only(['store', 'update', 'destroy'])
             ->middleware('role:owner,admin');
     });
 
